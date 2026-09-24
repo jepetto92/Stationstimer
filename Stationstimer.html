@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Stationstimer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Work+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F4F6F5; --surface:#FFFFFF; --surface-alt:#E9EDEC; --text:#10241E; --text-muted:#5B6B65;
+    --border: rgba(16,36,30,0.12);
+    --c-explain:#C98A2E; --c-work:#2C9A52; --c-switch:#178A93; --c-change:#D94E3A; --c-end:#6E4FC4;
+    --shadow: 0 10px 28px rgba(16,36,30,0.10);
+    --radius: 18px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0D1826; --surface:#152438; --surface-alt:#1C304A; --text:#F1F6FA; --text-muted:#8FA3BF;
+      --border: rgba(255,255,255,0.09);
+      --c-explain:#F2A93B; --c-work:#8FE86A; --c-switch:#48D6DE; --c-change:#FF6B57; --c-end:#B18CFF;
+      --shadow: 0 12px 32px rgba(0,0,0,0.4);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0D1826; --surface:#152438; --surface-alt:#1C304A; --text:#F1F6FA; --text-muted:#8FA3BF;
+    --border: rgba(255,255,255,0.09);
+    --c-explain:#F2A93B; --c-work:#8FE86A; --c-switch:#48D6DE; --c-change:#FF6B57; --c-end:#B18CFF;
+    --shadow: 0 12px 32px rgba(0,0,0,0.4);
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:'Work Sans', system-ui, -apple-system, sans-serif;
+    overflow-x:hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button{ font-family:inherit; cursor:pointer; }
+  input, select{ font-family:inherit; }
+  button:focus-visible, input:focus-visible, select:focus-visible{
+    outline:3px solid var(--c-switch); outline-offset:2px;
+  }
+  #app{ min-height:100vh; display:flex; flex-direction:column; }
+
+  .overall-bar{ height:5px; background:var(--surface-alt); }
+  .overall-bar__fill{ height:100%; background:var(--c-work); transition:width .3s ease; width:0%; }
+
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: .8rem 1rem; gap:.6rem; flex-wrap:wrap;
+  }
+  .station-indicator{
+    font-weight:600; font-size:.95rem; color:var(--text-muted);
+    background:var(--surface); border:1px solid var(--border); border-radius:999px;
+    padding:.35rem .9rem;
+  }
+  .icon-btn{
+    width:2.6rem; height:2.6rem; border-radius:999px; border:1px solid var(--border);
+    background:var(--surface); color:var(--text); display:flex; align-items:center; justify-content:center;
+    font-size:1.1rem;
+  }
+  .icon-row{ display:flex; gap:.5rem; }
+
+  .stage{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding: 1rem 1.2rem 0; text-align:center; gap:.9rem; position:relative;
+  }
+  #runCard{ position:relative; }
+  .schedule-rail{
+    position:absolute; top:50%; right:.4rem; transform:translateY(-50%);
+    width:8.6rem; max-height:11rem; z-index:5;
+    display:flex; flex-direction:column; align-items:center; gap:.3rem;
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    border:1px solid var(--border); border-radius:12px; padding:.4rem .4rem;
+    box-shadow:var(--shadow); backdrop-filter: blur(2px);
+  }
+  .schedule-rail__expand{
+    width:1.8rem; height:1.8rem; border-radius:999px; border:1px solid var(--border);
+    background:var(--surface-alt); color:var(--text-muted); font-size:.85rem; flex:0 0 auto;
+    align-self:flex-end;
+  }
+  .schedule-rail__track{
+    flex:1; width:100%; overflow-y:auto; display:flex; flex-direction:column; gap:.3rem;
+    -webkit-overflow-scrolling:touch; scrollbar-width:thin;
+  }
+  .rail-item{
+    flex:0 0 auto; width:100%; border-radius:9px; padding:.4rem .5rem;
+    display:flex; flex-direction:column; gap:.1rem; text-align:left;
+    background:var(--surface-alt); color:var(--text-muted); font-size:.68rem; line-height:1.25;
+    border-left:3px solid transparent;
+  }
+  .rail-item .rail-top{ display:flex; align-items:center; gap:.35rem; font-weight:700; }
+  .rail-item .rail-dot{ width:7px; height:7px; border-radius:50%; flex:0 0 auto; }
+  .rail-item .rail-sub{ font-size:.62rem; opacity:.9; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .rail-item.done{ opacity:.4; }
+  .rail-item.now{
+    background: color-mix(in srgb, var(--c-work) 22%, var(--surface));
+    color:var(--text); border-left-color: var(--c-work);
+  }
+
+  @media (max-width: 420px){
+    .schedule-rail{ width:7.4rem; right:.2rem; }
+    .rail-item{ font-size:.62rem; }
+    .rail-item .rail-sub{ font-size:.56rem; }
+  }
+
+  .schedule-list{ display:flex; flex-direction:column; gap:.15rem; max-height:60vh; overflow-y:auto; margin-top:-.4rem; }
+  .sched-item{
+    display:flex; align-items:center; gap:.6rem; padding:.5rem .6rem; border-radius:10px;
+    font-size:.9rem; color:var(--text-muted);
+  }
+  .sched-item .sched-dot{ width:9px; height:9px; border-radius:50%; flex:0 0 auto; background:var(--surface-alt); }
+  .sched-item .sched-label{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sched-item .sched-dur{ font-variant-numeric:tabular-nums; font-size:.82rem; flex:0 0 auto; }
+  .sched-item.done{ opacity:.45; text-decoration: line-through; }
+  .sched-item.current{
+    background: color-mix(in srgb, var(--c-work) 16%, var(--surface));
+    color:var(--text); font-weight:700;
+  }
+  .sched-item.current .sched-dot{ box-shadow: 0 0 0 3px color-mix(in srgb, var(--c-work) 30%, transparent); }
+  .phase-pill{
+    display:inline-flex; align-items:center; gap:.5rem;
+    padding:.5rem 1.2rem; border-radius:999px; font-weight:600; font-size:1.05rem;
+    background: color-mix(in srgb, var(--c-current, var(--c-work)) 18%, var(--surface));
+    color: var(--c-current, var(--c-work));
+    transition: background .35s ease, color .35s ease;
+  }
+  .timer-display{
+    font-family:'Bebas Neue', Impact, 'Arial Narrow', sans-serif;
+    font-size: clamp(4.2rem, 24vw, 9.5rem);
+    line-height:1; letter-spacing:.02em; font-variant-numeric:tabular-nums;
+    color: var(--text);
+    transition: transform .15s ease;
+  }
+  .timer-display.pulse{ animation: pulse .5s ease; }
+  @keyframes pulse{ 0%{ transform:scale(1);} 30%{ transform:scale(1.08);} 100%{ transform:scale(1);} }
+
+  .phase-progress{
+    width:min(420px, 88vw); height:10px; border-radius:999px; background:var(--surface-alt); overflow:hidden;
+  }
+  .phase-progress__fill{ height:100%; background: var(--c-current, var(--c-work)); transition: width .2s linear, background .35s ease; }
+
+  .next-preview{ color:var(--text-muted); font-size:.92rem; min-height:1.2em; }
+
+  .ready-card{
+    max-width:420px; margin: 0 auto; background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:1.4rem; box-shadow:var(--shadow);
+  }
+  .ready-card h1{ font-size:1.3rem; margin:0 0 .4rem; }
+  .ready-card p{ color:var(--text-muted); font-size:.92rem; margin:0 0 1rem; line-height:1.5;}
+
+  .music-panel{
+    background:var(--surface); border-top:1px solid var(--border); border-bottom:1px solid var(--border);
+    padding:.7rem 1rem .8rem;
+  }
+  .music-panel__row{ display:flex; align-items:center; gap:.5rem; }
+  .music-panel__transport{ display:flex; gap:.15rem; }
+  .music-panel__transport button{
+    background:none; border:none; color:var(--text); font-size:1.15rem; padding:.3rem .4rem; border-radius:8px;
+  }
+  .music-panel__transport button:hover{ background:var(--surface-alt); }
+  .music-panel__name{
+    flex:1; min-width:0; font-weight:600; font-size:.92rem;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .music-panel__times{ font-size:.75rem; color:var(--text-muted); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .music-progress{
+    height:6px; border-radius:999px; background:var(--surface-alt); margin:.5rem 0 .4rem; overflow:hidden; cursor:pointer;
+  }
+  .music-progress__fill{ height:100%; background:var(--c-work); width:0%; }
+  .music-status{ font-size:.75rem; color:var(--c-change); min-height:1.1em; margin-bottom:.3rem; }
+  .track-list{ max-height:6.5rem; overflow-y:auto; display:flex; flex-direction:column; gap:.15rem; }
+  .track-row{
+    display:flex; align-items:center; gap:.5rem; padding:.35rem .5rem; border-radius:8px; font-size:.85rem;
+    background:transparent; border:none; color:var(--text-muted); text-align:left; width:100%;
+  }
+  .track-row:hover{ background:var(--surface-alt); }
+  .track-row.active{ background: color-mix(in srgb, var(--c-work) 16%, var(--surface)); color:var(--text); font-weight:600; }
+  .track-row span{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .track-row button{ background:none; border:none; color:var(--text-muted); font-size:.9rem; padding:.1rem .3rem; }
+  .add-music-btn{
+    border:1px solid var(--border); background:var(--surface-alt); color:var(--c-work);
+    font-weight:600; font-size:.82rem; padding:.4rem .65rem; border-radius:10px; white-space:nowrap;
+  }
+  .add-music-btn:hover{ filter:brightness(0.95); }
+  .shuffle-toggle{ display:flex; align-items:center; gap:.4rem; font-size:.82rem; color:var(--text-muted); }
+  .shuffle-toggle input{ accent-color: var(--c-work); width:16px; height:16px; }
+
+  .controls{
+    display:flex; align-items:center; justify-content:center; gap:1rem;
+    padding: 1rem 1rem calc(1.2rem + env(safe-area-inset-bottom));
+  }
+  .btn-secondary{
+    width:3.2rem; height:3.2rem; border-radius:999px; border:1px solid var(--border);
+    background:var(--surface); color:var(--text); font-size:1.15rem;
+  }
+  .btn-secondary:disabled{ opacity:.4; }
+  .btn-primary{
+    min-width:9.5rem; height:3.6rem; border-radius:999px; border:none;
+    background:var(--c-work); color:#04240F; font-weight:700; font-size:1.05rem;
+    display:flex; align-items:center; justify-content:center; gap:.5rem;
+    box-shadow: var(--shadow);
+  }
+  .btn-primary.pause{ background:var(--c-change); color:#2A0A05; }
+
+  /* Settings overlay */
+  .overlay{
+    position:fixed; inset:0; background:rgba(0,0,0,.45); display:none;
+    align-items:flex-end; justify-content:center; z-index:50;
+  }
+  .overlay.open{ display:flex; }
+  .sheet{
+    width:100%; max-width:560px; max-height:88vh; overflow-y:auto;
+    background:var(--bg); border-radius:22px 22px 0 0; padding:1.2rem 1.2rem calc(1.6rem + env(safe-area-inset-bottom));
+    box-shadow: 0 -10px 40px rgba(0,0,0,.3);
+  }
+  @media (min-width: 640px){
+    .overlay{ align-items:center; }
+    .sheet{ border-radius:22px; max-height:82vh; }
+  }
+  .sheet h2{ margin:.2rem 0 1rem; font-size:1.15rem; }
+  .sheet-close{ float:right; }
+  .field-group{ margin-bottom:1.3rem; }
+  .field-group h3{ font-size:.8rem; text-transform:none; color:var(--text-muted); margin:0 0 .6rem; font-weight:600; }
+  .field-row{ display:flex; align-items:center; gap:.6rem; margin-bottom:.6rem; }
+  .field-row label{ flex:1; font-size:.92rem; }
+  .field-row input[type=number]{
+    width:5rem; padding:.45rem .5rem; border-radius:10px; border:1px solid var(--border);
+    background:var(--surface); color:var(--text); font-size:.95rem; text-align:center;
+  }
+  .field-row input[type=text]{
+    flex:1.4; padding:.5rem .7rem; border-radius:10px; border:1px solid var(--border);
+    background:var(--surface); color:var(--text); font-size:.92rem;
+  }
+  .chips{ display:flex; gap:.4rem; flex-wrap:wrap; margin:-.2rem 0 .7rem; }
+  .chip{
+    padding:.28rem .7rem; border-radius:999px; border:1px solid var(--border); background:var(--surface);
+    color:var(--text-muted); font-size:.82rem;
+  }
+  .chip.active{ background:var(--c-work); color:#04240F; border-color:transparent; font-weight:600; }
+  .test-btn{
+    border:1px solid var(--border); background:var(--surface); color:var(--text); border-radius:10px;
+    padding:.4rem .6rem; font-size:.85rem;
+  }
+  .hint{ color:var(--text-muted); font-size:.78rem; margin:.2rem 0 0; }
+  .select-wrap select{
+    width:100%; padding:.5rem .6rem; border-radius:10px; border:1px solid var(--border);
+    background:var(--surface); color:var(--text);
+  }
+  .toggle-row{ display:flex; align-items:center; justify-content:space-between; padding:.4rem 0; }
+  .switch{ position:relative; width:44px; height:26px; }
+  .switch input{ opacity:0; width:0; height:0; }
+  .slider{ position:absolute; inset:0; background:var(--surface-alt); border-radius:999px; transition:.2s; border:1px solid var(--border); }
+  .slider::before{ content:""; position:absolute; width:20px; height:20px; left:2px; top:2px; background:var(--text-muted); border-radius:50%; transition:.2s; }
+  input:checked + .slider{ background: color-mix(in srgb, var(--c-work) 40%, var(--surface-alt)); }
+  input:checked + .slider::before{ transform:translateX(18px); background:var(--c-work); }
+  .sheet-actions{ display:flex; gap:.7rem; margin-top:.4rem; }
+  .sheet-actions button{
+    flex:1; padding:.7rem; border-radius:12px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-weight:600;
+  }
+  .sheet-actions .danger{ color:var(--c-change); }
+  .total-time{ font-size:.85rem; color:var(--text-muted); margin-top:.3rem; }
+
+  .schedule-preview{ display:flex; gap:.4rem; overflow-x:auto; padding:.2rem .2rem .5rem; margin-top:.2rem; max-width:100%; }
+  .schedule-preview .tag{
+    flex:0 0 auto; font-size:.75rem; padding:.3rem .6rem; border-radius:999px; white-space:nowrap;
+    background:var(--surface); border:1px solid var(--border); color:var(--text-muted);
+  }
+  .sr-only{ position:absolute; width:1px;height:1px; overflow:hidden; clip:rect(0,0,0,0); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="overall-bar"><div class="overall-bar__fill" id="overallFill"></div></div>
+
+  <div class="topbar">
+    <div class="station-indicator" id="stationIndicator">Bereit</div>
+    <div class="icon-row">
+      <button class="icon-btn" id="themeBtn" title="Hell/Dunkel" aria-label="Hell/Dunkel umschalten">🌓</button>
+      <button class="icon-btn" id="fullscreenBtn" title="Vollbild" aria-label="Vollbild">⛶</button>
+      <button class="icon-btn" id="settingsBtn" title="Einstellungen" aria-label="Einstellungen öffnen">⚙️</button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div id="readyCard" class="ready-card">
+      <h1>Stationstimer für den Sportunterricht</h1>
+      <p>Erklären → Workout → Wechsel → Stationswechsel — mit Ton- und Sprachsignal für jede Phase. Stationen, Zeiten und Ansagen kannst du unten in den Einstellungen anpassen.</p>
+      <div class="total-time" id="totalTimeInfo"></div>
+    </div>
+
+    <div id="runCard" style="display:none; width:100%;">
+      <div class="phase-pill" id="phasePill" aria-live="polite">Erklären</div>
+      <div class="timer-display" id="timerDisplay" aria-live="off">01:00</div>
+      <div class="phase-progress"><div class="phase-progress__fill" id="phaseFill"></div></div>
+      <div class="next-preview" id="nextPreview">Als Nächstes: Workout</div>
+
+      <div class="schedule-rail" id="scheduleRail">
+        <button type="button" class="schedule-rail__expand" id="scheduleExpandBtn" aria-label="Ablauf groß anzeigen">⤢</button>
+        <div class="schedule-rail__track" id="scheduleRailTrack"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="music-panel">
+    <div class="music-status" id="musicStatus"></div>
+    <div class="music-panel__row">
+      <div class="music-panel__transport">
+        <button id="musicPrevBtn" aria-label="Vorheriger Song">⏮</button>
+        <button id="musicPlayBtn" aria-label="Musik abspielen/pausieren">▶</button>
+        <button id="musicNextBtn" aria-label="Nächster Song">⏭</button>
+      </div>
+      <div class="music-panel__name" id="musicName">Keine Musik geladen</div>
+      <div class="music-panel__times" id="musicTimes">0:00 / 0:00</div>
+      <button type="button" class="add-music-btn" id="addSongsBtn">+ Songs</button>
+      <button type="button" class="add-music-btn" id="addFolderBtn" title="Ganzen Ordner hinzufügen (nicht auf allen Geräten verfügbar)">+ Ordner</button>
+      <input type="file" id="musicInput" accept="audio/*" multiple style="display:none">
+      <input type="file" id="folderInput" accept="audio/*" multiple webkitdirectory directory style="display:none">
+    </div>
+    <div class="music-panel__row" style="margin-top:.35rem;">
+      <label class="shuffle-toggle">
+        <input type="checkbox" id="shuffleToggle">
+        <span>Zufällige Wiedergabe</span>
+      </label>
+    </div>
+    <div class="music-progress" id="musicProgressBar"><div class="music-progress__fill" id="musicProgressFill"></div></div>
+    <div class="track-list" id="trackList"></div>
+  </div>
+
+  <div class="controls">
+    <button class="btn-secondary" id="backBtn" disabled aria-label="Vorherige Phase">⏮</button>
+    <button class="btn-primary" id="startBtn">▶ Start</button>
+    <button class="btn-secondary" id="skipBtn" disabled aria-label="Nächste Phase">⏭</button>
+  </div>
+  <div style="text-align:center; padding-bottom:.8rem;">
+    <button class="test-btn" id="resetBtn" style="display:none;">↺ Zurücksetzen</button>
+  </div>
+</div>
+
+<div class="overlay" id="scheduleOverlay">
+  <div class="sheet">
+    <button class="icon-btn sheet-close" id="closeScheduleBtn" aria-label="Ablauf schließen">✕</button>
+    <h2>Ablauf</h2>
+    <div class="schedule-list" id="scheduleList"></div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="sheet">
+    <button class="icon-btn sheet-close" id="closeSettingsBtn" aria-label="Einstellungen schließen">✕</button>
+    <h2>Einstellungen</h2>
+
+    <div class="field-group">
+      <h3>Ablauf</h3>
+      <div class="field-row">
+        <label for="stations">Anzahl Stationen</label>
+        <input type="number" id="stations" min="1" max="30" value="11">
+      </div>
+      <div class="field-row">
+        <label for="explainSec">Erklärphase (Sek.)</label>
+        <input type="number" id="explainSec" min="5" max="600" value="60">
+      </div>
+      <div class="chips" data-target="explainSec">
+        <button class="chip" data-val="45">45s</button><button class="chip" data-val="60">60s</button><button class="chip" data-val="90">1:30</button><button class="chip" data-val="120">2:00</button>
+      </div>
+      <div class="field-row">
+        <label for="workSec">Workout Runde 1 (Sek.)</label>
+        <input type="number" id="workSec" min="5" max="600" value="60">
+      </div>
+      <div class="chips" data-target="workSec">
+        <button class="chip" data-val="30">30s</button><button class="chip" data-val="45">45s</button><button class="chip" data-val="60">60s</button><button class="chip" data-val="90">1:30</button>
+      </div>
+      <div class="field-row">
+        <label for="switchSec">Wechselpause an der Station (Sek.)</label>
+        <input type="number" id="switchSec" min="0" max="120" value="15">
+      </div>
+      <div class="chips" data-target="switchSec">
+        <button class="chip" data-val="10">10s</button><button class="chip" data-val="15">15s</button><button class="chip" data-val="20">20s</button><button class="chip" data-val="30">30s</button>
+      </div>
+      <div class="field-row">
+        <label for="workSec2">Workout Runde 2 (nach dem Wechsel) (Sek.)</label>
+        <input type="number" id="workSec2" min="5" max="600" value="60">
+      </div>
+      <div class="chips" data-target="workSec2">
+        <button class="chip" data-val="30">30s</button><button class="chip" data-val="45">45s</button><button class="chip" data-val="60">60s</button><button class="chip" data-val="90">1:30</button>
+      </div>
+      <div class="field-row">
+        <label for="changeSec">Zeit für Stationswechsel (Sek.)</label>
+        <input type="number" id="changeSec" min="0" max="300" value="15">
+      </div>
+      <div class="chips" data-target="changeSec">
+        <button class="chip" data-val="10">10s</button><button class="chip" data-val="15">15s</button><button class="chip" data-val="20">20s</button><button class="chip" data-val="30">30s</button>
+      </div>
+      <p class="total-time" id="totalTimeSettings"></p>
+    </div>
+
+    <div class="field-group">
+      <h3>Ansagen (mehrere Varianten mit „/" trennen — es wird jedes Mal zufällig gewählt)</h3>
+      <div class="field-row"><label for="phraseExplain">Erklären</label></div>
+      <div class="field-row"><input type="text" id="phraseExplain" value="Jetzt erklären"><button class="test-btn" data-say="phraseExplain">🔊</button></div>
+      <div class="field-row"><label for="phraseWork">Workout-Start</label></div>
+      <div class="field-row"><input type="text" id="phraseWork" value="Workout, los geht's!/Auf geht's, Training!/Let's go!"><button class="test-btn" data-say="phraseWork">🔊</button></div>
+      <div class="field-row"><label for="phraseSwitch">Wechsel (an der Station)</label></div>
+      <div class="field-row"><input type="text" id="phraseSwitch" value="Wechsel!"><button class="test-btn" data-say="phraseSwitch">🔊</button></div>
+      <div class="field-row"><label for="phraseChange">Stationswechsel</label></div>
+      <div class="field-row"><input type="text" id="phraseChange" value="Stationswechsel!"><button class="test-btn" data-say="phraseChange">🔊</button></div>
+      <div class="field-row"><label for="phraseEnd">Ende</label></div>
+      <div class="field-row"><input type="text" id="phraseEnd" value="Fertig, gut gemacht!"><button class="test-btn" data-say="phraseEnd">🔊</button></div>
+    </div>
+
+    <div class="field-group">
+      <h3>Stimme &amp; Ton</h3>
+      <div class="select-wrap">
+        <select id="voiceSelect"></select>
+      </div>
+      <div class="toggle-row">
+        <span>Musik bei Ansage leiser drehen</span>
+        <label class="switch"><input type="checkbox" id="duckToggle" checked><span class="slider"></span></label>
+      </div>
+      <div class="field-row">
+        <label for="explainVolume">Musiklautstärke während des Erklärens (%)</label>
+        <input type="number" id="explainVolume" min="0" max="100" value="35">
+      </div>
+      <div class="field-row">
+        <label for="transitionVolume">Musiklautstärke bei Wechsel &amp; Stationswechsel (%)</label>
+        <input type="number" id="transitionVolume" min="0" max="100" value="50">
+      </div>
+      <div class="field-row">
+        <label for="introSkip">Song-Intro überspringen (Sek.)</label>
+        <input type="number" id="introSkip" min="0" max="120" value="20">
+      </div>
+      <div class="field-row">
+        <label for="outroSkip">Song vor Ende abschneiden (Sek.)</label>
+        <input type="number" id="outroSkip" min="0" max="120" value="20">
+      </div>
+      <div class="toggle-row">
+        <span>„3, 2, 1"-Countdown vor jedem Phasenwechsel</span>
+        <label class="switch"><input type="checkbox" id="countdownToggle" checked><span class="slider"></span></label>
+      </div>
+      <div class="toggle-row">
+        <span>Bildschirm während des Laufs an lassen</span>
+        <label class="switch"><input type="checkbox" id="wakeToggle" checked><span class="slider"></span></label>
+      </div>
+      <p class="hint">Songs, die du über „+ Songs" hinzufügst, bleiben nur für diese Sitzung geladen — nach dem Neuladen der Seite bitte erneut hinzufügen.</p>
+    </div>
+
+    <div class="sheet-actions">
+      <button id="defaultsBtn" class="danger">Standardwerte</button>
+      <button id="saveSettingsBtn">Übernehmen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var STORAGE_KEY = "pe_station_timer_settings_v1";
+
+  var defaults = {
+    stations: 11, explainSec: 60, workSec: 60, switchSec: 15, workSec2: 60, changeSec: 15,
+    phraseExplain: "Jetzt erklären",
+    phraseWork: "Workout, los geht's!/Auf geht's, Training!/Let's go!",
+    phraseSwitch: "Wechsel!",
+    phraseChange: "Stationswechsel!",
+    phraseEnd: "Fertig, gut gemacht!",
+    voiceURI: "", duck: true, wake: true, theme: "system",
+    explainVolume: 35, transitionVolume: 50, countdown: true, introSkip: 20, outroSkip: 20
+  };
+
+  function loadSettings(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return Object.assign({}, defaults);
+      var parsed = JSON.parse(raw);
+      return Object.assign({}, defaults, parsed);
+    }catch(e){ return Object.assign({}, defaults); }
+  }
+  function saveSettings(s){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }catch(e){}
+  }
+
+  var cfg = loadSettings();
+  if(cfg.theme && cfg.theme !== "system"){ document.documentElement.setAttribute("data-theme", cfg.theme); }
+
+  // ---------- DOM refs ----------
+  var $ = function(id){ return document.getElementById(id); };
+  var readyCard = $("readyCard"), runCard = $("runCard");
+  var scheduleList = $("scheduleList"), scheduleOverlay = $("scheduleOverlay"), closeScheduleBtn = $("closeScheduleBtn");
+  var scheduleRailTrack = $("scheduleRailTrack"), scheduleExpandBtn = $("scheduleExpandBtn");
+  var stationIndicator = $("stationIndicator");
+  var phasePill = $("phasePill"), timerDisplay = $("timerDisplay"), phaseFill = $("phaseFill");
+  var nextPreview = $("nextPreview"), overallFill = $("overallFill");
+  var startBtn = $("startBtn"), skipBtn = $("skipBtn"), backBtn = $("backBtn"), resetBtn = $("resetBtn");
+  var settingsBtn = $("settingsBtn"), overlay = $("overlay"), closeSettingsBtn = $("closeSettingsBtn");
+  var themeBtn = $("themeBtn"), fullscreenBtn = $("fullscreenBtn");
+  var musicInput = $("musicInput"), musicName = $("musicName");
+  var folderInput = $("folderInput"), addSongsBtn = $("addSongsBtn"), addFolderBtn = $("addFolderBtn");
+  var shuffleToggle = $("shuffleToggle");
+  var musicPlayBtn = $("musicPlayBtn"), musicPrevBtn = $("musicPrevBtn"), musicNextBtn = $("musicNextBtn");
+  var musicTimes = $("musicTimes"), musicStatus = $("musicStatus");
+  var musicProgressBar = $("musicProgressBar"), musicProgressFill = $("musicProgressFill");
+  var trackList = $("trackList");
+
+  // ---------- populate settings fields from cfg ----------
+  function fieldsFromCfg(){
+    $("stations").value = cfg.stations;
+    $("explainSec").value = cfg.explainSec;
+    $("workSec").value = cfg.workSec;
+    $("switchSec").value = cfg.switchSec;
+    $("workSec2").value = cfg.workSec2;
+    $("changeSec").value = cfg.changeSec;
+    $("phraseExplain").value = cfg.phraseExplain;
+    $("phraseWork").value = cfg.phraseWork;
+    $("phraseSwitch").value = cfg.phraseSwitch;
+    $("phraseChange").value = cfg.phraseChange;
+    $("phraseEnd").value = cfg.phraseEnd;
+    $("duckToggle").checked = !!cfg.duck;
+    $("explainVolume").value = cfg.explainVolume;
+    $("transitionVolume").value = cfg.transitionVolume;
+    $("introSkip").value = cfg.introSkip;
+    $("outroSkip").value = cfg.outroSkip;
+    $("countdownToggle").checked = !!cfg.countdown;
+    $("wakeToggle").checked = !!cfg.wake;
+    updateTotalTime();
+  }
+  function cfgFromFields(){
+    cfg.stations = Math.max(1, parseInt($("stations").value,10) || defaults.stations);
+    cfg.explainSec = Math.max(0, parseInt($("explainSec").value,10) || 0);
+    cfg.workSec = Math.max(1, parseInt($("workSec").value,10) || defaults.workSec);
+    cfg.switchSec = Math.max(0, parseInt($("switchSec").value,10) || 0);
+    cfg.workSec2 = Math.max(1, parseInt($("workSec2").value,10) || defaults.workSec2);
+    cfg.changeSec = Math.max(0, parseInt($("changeSec").value,10) || 0);
+    cfg.phraseExplain = $("phraseExplain").value || defaults.phraseExplain;
+    cfg.phraseWork = $("phraseWork").value || defaults.phraseWork;
+    cfg.phraseSwitch = $("phraseSwitch").value || defaults.phraseSwitch;
+    cfg.phraseChange = $("phraseChange").value || defaults.phraseChange;
+    cfg.phraseEnd = $("phraseEnd").value || defaults.phraseEnd;
+    var vs = $("voiceSelect"); cfg.voiceURI = vs && vs.value ? vs.value : "";
+    cfg.duck = $("duckToggle").checked;
+    cfg.explainVolume = Math.max(0, Math.min(100, parseInt($("explainVolume").value,10) || 0));
+    cfg.transitionVolume = Math.max(0, Math.min(100, parseInt($("transitionVolume").value,10) || 0));
+    cfg.introSkip = Math.max(0, Math.min(120, parseInt($("introSkip").value,10) || 0));
+    cfg.outroSkip = Math.max(0, Math.min(120, parseInt($("outroSkip").value,10) || 0));
+    cfg.countdown = $("countdownToggle").checked;
+    cfg.wake = $("wakeToggle").checked;
+  }
+  function updateTotalTime(){
+    var stations = parseInt($("stations").value,10) || 0;
+    var explainSec = parseInt($("explainSec").value,10) || 0;
+    var workSec = parseInt($("workSec").value,10) || 0;
+    var switchSec = parseInt($("switchSec").value,10) || 0;
+    var workSec2 = parseInt($("workSec2").value,10) || 0;
+    var changeSec = parseInt($("changeSec").value,10) || 0;
+    var total = stations*(explainSec + workSec + switchSec + workSec2) + Math.max(0,stations-1)*changeSec;
+    var m = Math.floor(total/60), s = total%60;
+    var txt = "Geschätzte Gesamtdauer: ca. " + m + " Min " + (s? s+" Sek" : "");
+    $("totalTimeSettings").textContent = txt;
+    $("totalTimeInfo").textContent = txt + " · " + stations + " Stationen";
+  }
+  ["stations","explainSec","workSec","switchSec","workSec2","changeSec"].forEach(function(id){
+    $(id).addEventListener("input", updateTotalTime);
+  });
+  document.querySelectorAll(".chips").forEach(function(group){
+    group.addEventListener("click", function(e){
+      var btn = e.target.closest(".chip");
+      if(!btn) return;
+      var target = group.getAttribute("data-target");
+      $(target).value = btn.getAttribute("data-val");
+      updateTotalTime();
+    });
+  });
+
+  // ---------- speech synthesis ----------
+  var voicesReady = false;
+  function populateVoices(){
+    var sel = $("voiceSelect");
+    var voices = ("speechSynthesis" in window) ? window.speechSynthesis.getVoices() : [];
+    sel.innerHTML = "";
+    var opt0 = document.createElement("option");
+    opt0.value = ""; opt0.textContent = "Automatisch (Deutsch bevorzugt)";
+    sel.appendChild(opt0);
+    voices.forEach(function(v){
+      var opt = document.createElement("option");
+      opt.value = v.voiceURI; opt.textContent = v.name + " (" + v.lang + ")";
+      if(v.voiceURI === cfg.voiceURI) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    voicesReady = true;
+  }
+  if("speechSynthesis" in window){
+    populateVoices();
+    window.speechSynthesis.onvoiceschanged = populateVoices;
+    // Some mobile browsers (notably Android Chrome/WebView) populate the voice
+    // list late and never fire onvoiceschanged reliably — poll for a while too.
+    var voicePollCount = 0;
+    var voicePoll = setInterval(function(){
+      voicePollCount++;
+      var have = window.speechSynthesis.getVoices();
+      if(have.length){ populateVoices(); }
+      if(have.length || voicePollCount > 15){ clearInterval(voicePoll); }
+    }, 400);
+  }
+  function pickVoice(){
+    if(!("speechSynthesis" in window)) return null;
+    var voices = window.speechSynthesis.getVoices();
+    if(cfg.voiceURI){
+      var chosen = voices.find(function(v){ return v.voiceURI === cfg.voiceURI; });
+      if(chosen) return chosen;
+    }
+    var de = voices.find(function(v){ return v.lang && v.lang.toLowerCase().indexOf("de") === 0; });
+    return de || voices[0] || null;
+  }
+  var speechDuckFallbackTimer = null;
+  function speak(text, restoreLevel){
+    if(!text || !("speechSynthesis" in window)) return;
+    var variants = text.split("/").map(function(t){ return t.trim(); }).filter(Boolean);
+    var chosenText = variants.length ? variants[Math.floor(Math.random()*variants.length)] : text;
+    var synth = window.speechSynthesis;
+    var targetRestore = (typeof restoreLevel === "number") ? restoreLevel : musicBaseVolume;
+    function restoreMusic(){
+      if(speechDuckFallbackTimer){ clearTimeout(speechDuckFallbackTimer); speechDuckFallbackTimer = null; }
+      if(cfg.duck && playlist.length){
+        audioEl.volume = targetRestore;
+        musicBaseVolume = targetRestore;
+      }
+    }
+    function doSpeak(){
+      try{
+        var utter = new SpeechSynthesisUtterance(chosenText);
+        var v = pickVoice();
+        if(v) utter.voice = v;
+        utter.lang = (v && v.lang) || "de-DE";
+        utter.rate = 1.0;
+        utter.volume = 1;
+        utter.onstart = function(){
+          if(cfg.duck && playlist.length && !audioEl.paused){
+            audioEl.volume = 0.03; // near-silent while the announcement is actually speaking
+            // safety net in case onend/onerror never fires on some engines
+            if(speechDuckFallbackTimer) clearTimeout(speechDuckFallbackTimer);
+            speechDuckFallbackTimer = setTimeout(restoreMusic, 4000);
+          }
+        };
+        utter.onend = restoreMusic;
+        utter.onerror = restoreMusic;
+        synth.speak(utter);
+      }catch(e){}
+    }
+    if(synth.speaking || synth.pending){
+      synth.cancel();
+      setTimeout(doSpeak, 60);
+    }else{
+      doSpeak();
+    }
+  }
+  // Chrome/Android occasionally needs an initial "warm-up" utterance triggered
+  // directly from a user gesture before it will speak anything at all, and can
+  // silently stall on long-running pages — keep nudging it while the timer runs.
+  var speechWarmedUp = false;
+  function warmUpSpeech(){
+    if(speechWarmedUp || !("speechSynthesis" in window)) return;
+    try{
+      window.speechSynthesis.getVoices();
+      var warm = new SpeechSynthesisUtterance(" ");
+      warm.volume = 0;
+      window.speechSynthesis.speak(warm);
+      speechWarmedUp = true;
+    }catch(e){}
+  }
+  setInterval(function(){
+    if(running && "speechSynthesis" in window && window.speechSynthesis.speaking){
+      window.speechSynthesis.resume();
+    }
+  }, 4000);
+
+  // ---------- beeps ----------
+  var audioCtx = null;
+  function getCtx(){
+    if(!audioCtx){
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if(AC) audioCtx = new AC();
+    }
+    if(audioCtx && audioCtx.state === "suspended"){ audioCtx.resume(); }
+    return audioCtx;
+  }
+  function beep(freq, dur, type, vol, times, gap){
+    var ctx = getCtx();
+    if(!ctx) return 0;
+    freq = freq||880; dur = dur||0.15; type = type||"sine"; vol = vol||0.3; times = times||1; gap = gap||0.12;
+    var t = ctx.currentTime;
+    for(var i=0;i<times;i++){
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = type; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(vol, t+0.02);
+      gain.gain.linearRampToValueAtTime(0, t+dur);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t); osc.stop(t+dur+0.03);
+      t += dur+gap;
+    }
+    return (times*dur + (times-1)*gap) * 1000;
+  }
+  function signalFor(type){
+    switch(type){
+      case "explain": return beep(700, 0.18, "sine", 0.28, 1, 0);
+      case "work1": return beep(1000, 0.14, "square", 0.28, 2, 0.1);
+      case "work2": return beep(1150, 0.11, "square", 0.28, 3, 0.08);
+      case "change": return beep(480, 0.35, "sawtooth", 0.25, 1, 0);
+      case "end": return beep(900, 0.16, "sine", 0.28, 3, 0.14);
+      default: return 0;
+    }
+  }
+
+  // ---------- music ----------
+  var playlist = [];
+  var trackIndex = 0;
+  var audioEl = new Audio();
+  audioEl.preload = "auto";
+  audioEl.volume = 1;
+
+  function fmtTime(sec){
+    if(!isFinite(sec) || sec<0) sec = 0;
+    var m = Math.floor(sec/60), s = Math.floor(sec%60);
+    return m+":"+(s<10?"0":"")+s;
+  }
+  function setMusicStatus(msg){ musicStatus.textContent = msg || ""; }
+
+  function renderTrackList(){
+    trackList.innerHTML = "";
+    playlist.forEach(function(t, i){
+      var row = document.createElement("button");
+      row.className = "track-row" + (i===trackIndex ? " active" : "");
+      row.type = "button";
+      var span = document.createElement("span");
+      span.textContent = (i+1)+". "+t.name;
+      row.appendChild(span);
+      var rm = document.createElement("button");
+      rm.textContent = "✕"; rm.title = "Entfernen"; rm.type="button";
+      rm.addEventListener("click", function(ev){
+        ev.stopPropagation();
+        var wasCurrent = (i === trackIndex);
+        URL.revokeObjectURL(t.url);
+        playlist.splice(i,1);
+        if(!playlist.length){ audioEl.pause(); audioEl.removeAttribute("src"); trackIndex = 0; }
+        else if(wasCurrent){ loadTrack(Math.min(i, playlist.length-1)); if(!audioEl.paused) audioEl.play().catch(function(){}); }
+        else if(i < trackIndex){ trackIndex--; }
+        refreshMusicUI();
+      });
+      row.appendChild(rm);
+      row.addEventListener("click", function(){ loadTrack(i); audioEl.play().catch(handlePlayError); });
+      trackList.appendChild(row);
+    });
+  }
+
+  function refreshMusicUI(){
+    musicName.textContent = playlist.length ? playlist[trackIndex].name : "Keine Musik geladen";
+    musicPlayBtn.textContent = (!audioEl.paused && playlist.length) ? "⏸" : "▶";
+    musicTimes.textContent = fmtTime(audioEl.currentTime) + " / " + fmtTime(audioEl.duration);
+    var pct = (audioEl.duration>0) ? (audioEl.currentTime/audioEl.duration*100) : 0;
+    musicProgressFill.style.width = pct + "%";
+    renderTrackList();
+  }
+
+  audioEl.addEventListener("timeupdate", function(){
+    musicTimes.textContent = fmtTime(audioEl.currentTime) + " / " + fmtTime(audioEl.duration);
+    var pct = (audioEl.duration>0) ? (audioEl.currentTime/audioEl.duration*100) : 0;
+    musicProgressFill.style.width = pct + "%";
+    if(!outroTriggered && audioEl.currentTime >= currentOutroCutoff){
+      outroTriggered = true;
+      playNext();
+    }
+  });
+  audioEl.addEventListener("play", function(){ setMusicStatus(""); musicPlayBtn.textContent = "⏸"; });
+  audioEl.addEventListener("pause", function(){ musicPlayBtn.textContent = "▶"; });
+  audioEl.addEventListener("ended", function(){ playNext(); });
+  audioEl.addEventListener("error", function(){
+    setMusicStatus("Dieser Song konnte nicht abgespielt werden (Format?) — versuche den nächsten.");
+  });
+
+  musicProgressBar.addEventListener("click", function(e){
+    if(!audioEl.duration) return;
+    var rect = musicProgressBar.getBoundingClientRect();
+    var ratio = Math.min(1, Math.max(0, (e.clientX-rect.left)/rect.width));
+    audioEl.currentTime = ratio*audioEl.duration;
+  });
+
+  function handlePlayError(err){
+    setMusicStatus("Wiedergabe wurde vom Browser blockiert — bitte nochmal auf ▶ tippen.");
+  }
+
+  musicInput.addEventListener("change", function(e){
+    addFilesToPlaylist(Array.from(e.target.files || []));
+    musicInput.value = "";
+  });
+  folderInput.addEventListener("change", function(e){
+    var files = Array.from(e.target.files || []).filter(function(f){
+      if(f.type && f.type.indexOf("audio") === 0) return true;
+      return /\.(mp3|wav|m4a|ogg|oga|flac|aac|opus|wma)$/i.test(f.name);
+    });
+    if(!files.length){
+      setMusicStatus("Im gewählten Ordner wurden keine Audiodateien gefunden.");
+    }
+    addFilesToPlaylist(files);
+    folderInput.value = "";
+  });
+  function addFilesToPlaylist(files){
+    if(!files.length) return;
+    var wasEmpty = playlist.length === 0;
+    files.forEach(function(f){
+      playlist.push({ name: f.name, url: URL.createObjectURL(f) });
+    });
+    if(wasEmpty){ loadTrack(0); } else { refreshMusicUI(); }
+  }
+  addSongsBtn.addEventListener("click", function(){ musicInput.click(); });
+  addFolderBtn.addEventListener("click", function(){
+    if(!("webkitdirectory" in folderInput)){
+      setMusicStatus("Ordner-Auswahl wird von diesem Browser leider nicht unterstützt — nutze „+ Songs“.");
+    }
+    folderInput.click();
+  });
+  var currentOutroCutoff = Infinity;
+  var outroTriggered = false;
+
+  function loadTrack(i){
+    if(!playlist.length) return;
+    trackIndex = ((i % playlist.length) + playlist.length) % playlist.length;
+    audioEl.src = playlist[trackIndex].url;
+    currentOutroCutoff = Infinity;
+    outroTriggered = false;
+    var applyMetadata = function(){
+      audioEl.removeEventListener("loadedmetadata", applyMetadata);
+      if(!isFinite(audioEl.duration) || audioEl.duration <= 0) return;
+      var introPoint = 0;
+      if(cfg.introSkip > 0){
+        introPoint = Math.min(cfg.introSkip, audioEl.duration * 0.5);
+        if(introPoint > 0.5) audioEl.currentTime = introPoint;
+      }
+      if(cfg.outroSkip > 0){
+        var cutoff = audioEl.duration - cfg.outroSkip;
+        // keep at least 5s of playable material after the intro skip
+        if(cutoff > introPoint + 5) currentOutroCutoff = cutoff;
+      }
+    };
+    audioEl.addEventListener("loadedmetadata", applyMetadata);
+    refreshMusicUI();
+  }
+  function playMusic(){
+    if(!playlist.length){ setMusicStatus("Bitte zuerst über „+ Songs“ oder „+ Ordner“ Musik hinzufügen."); return; }
+    if(!audioEl.src){
+      var start = (shuffleToggle.checked && playlist.length>1) ? Math.floor(Math.random()*playlist.length) : trackIndex;
+      loadTrack(start);
+    }
+    var p = audioEl.play();
+    if(p && p.catch) p.catch(handlePlayError);
+    refreshMusicUI();
+  }
+  function pauseMusic(){ audioEl.pause(); refreshMusicUI(); }
+  function playNext(){
+    if(!playlist.length) return;
+    if(shuffleToggle.checked && playlist.length > 1){
+      var next;
+      do{ next = Math.floor(Math.random()*playlist.length); }while(next === trackIndex);
+      loadTrack(next);
+    }else{
+      loadTrack(trackIndex+1);
+    }
+    audioEl.play().catch(handlePlayError);
+  }
+  function playPrev(){ if(!playlist.length) return; loadTrack(trackIndex-1); audioEl.play().catch(handlePlayError); }
+  musicPlayBtn.addEventListener("click", function(){ if(audioEl.paused) playMusic(); else pauseMusic(); });
+  musicNextBtn.addEventListener("click", playNext);
+  musicPrevBtn.addEventListener("click", playPrev);
+  function duckMusic(ms){
+    if(!cfg.duck || playlist.length===0 || audioEl.paused) return;
+    audioEl.volume = Math.min(musicBaseVolume, 0.12);
+    if(duckTimer) clearTimeout(duckTimer);
+    duckTimer = setTimeout(function(){ audioEl.volume = musicBaseVolume; }, ms || 1600);
+  }
+  var musicBaseVolume = 1;
+  var duckTimer = null;
+  function setMusicBaseline(vol){
+    musicBaseVolume = vol;
+    if(!duckTimer) audioEl.volume = vol;
+  }
+
+  // ---------- wake lock ----------
+  var wakeLock = null;
+  function requestWake(){
+    if(!cfg.wake || !("wakeLock" in navigator)) return;
+    navigator.wakeLock.request("screen").then(function(wl){ wakeLock = wl; }).catch(function(){});
+  }
+  function releaseWake(){
+    if(wakeLock){ wakeLock.release().catch(function(){}); wakeLock = null; }
+  }
+  document.addEventListener("visibilitychange", function(){
+    if(document.visibilityState === "visible" && running && cfg.wake) requestWake();
+  });
+
+  // ---------- schedule ----------
+  var schedule = [];
+  var idx = -1;
+  var running = false;
+  var endTime = 0;
+  var remainingMs = 0;
+  var tickHandle = null;
+
+  var colorMap = { explain:"--c-explain", work1:"--c-work", switchpause:"--c-switch", work2:"--c-work", change:"--c-change", end:"--c-end" };
+  var labelMap = { explain:"Erklären", work1:"Workout · Runde 1", switchpause:"Wechsel", work2:"Workout · Runde 2", change:"Stationswechsel", end:"Fertig" };
+
+  function buildSchedule(){
+    var s = [];
+    for(var i=1;i<=cfg.stations;i++){
+      s.push({ type:"explain", station:i, duration:cfg.explainSec, announce:cfg.phraseExplain });
+      s.push({ type:"work1", station:i, duration:cfg.workSec, announce:cfg.phraseWork });
+      s.push({ type:"switchpause", station:i, duration:cfg.switchSec, announce:cfg.phraseSwitch });
+      s.push({ type:"work2", station:i, duration:cfg.workSec2, announce:cfg.phraseWork });
+      if(i < cfg.stations){
+        s.push({ type:"change", station:i, duration:cfg.changeSec, announce:cfg.phraseChange });
+      }
+    }
+    s.push({ type:"end", station:cfg.stations, duration:5, announce:cfg.phraseEnd });
+    return s;
+  }
+
+  function labelFor(phase){ return labelMap[phase.type]; }
+  var shortLabelMap = { explain:"Erkl.", work1:"WO 1", switchpause:"Wex", work2:"WO 2", change:"St-W", end:"Ende" };
+
+  function renderScheduleList(){
+    scheduleList.innerHTML = "";
+    var frag = document.createDocumentFragment();
+    schedule.forEach(function(phase){
+      var item = document.createElement("div");
+      item.className = "sched-item";
+      var dot = document.createElement("span");
+      dot.className = "sched-dot";
+      dot.style.background = "var(" + colorMap[phase.type] + ")";
+      var label = document.createElement("span");
+      label.className = "sched-label";
+      label.textContent = phase.type === "end" ? "Ende" : ("Station " + phase.station + " · " + labelFor(phase));
+      var dur = document.createElement("span");
+      dur.className = "sched-dur";
+      dur.textContent = formatTime(phase.duration*1000);
+      item.appendChild(dot); item.appendChild(label); item.appendChild(dur);
+      frag.appendChild(item);
+    });
+    scheduleList.appendChild(frag);
+    renderScheduleRail();
+    updateScheduleHighlight();
+  }
+
+  function renderScheduleRail(){
+    scheduleRailTrack.innerHTML = "";
+    var frag = document.createDocumentFragment();
+    schedule.forEach(function(phase){
+      var item = document.createElement("div");
+      item.className = "rail-item";
+      var top = document.createElement("span");
+      top.className = "rail-top";
+      var dot = document.createElement("span");
+      dot.className = "rail-dot"; dot.style.background = "var(" + colorMap[phase.type] + ")";
+      var st = document.createElement("span");
+      st.textContent = phase.type === "end" ? "Ende" : ("Station " + phase.station);
+      top.appendChild(dot); top.appendChild(st);
+      var sub = document.createElement("span");
+      sub.className = "rail-sub";
+      sub.textContent = labelFor(phase) + " · " + formatTime(phase.duration*1000);
+      item.appendChild(top); item.appendChild(sub);
+      item.addEventListener("click", openScheduleOverlay);
+      frag.appendChild(item);
+    });
+    scheduleRailTrack.appendChild(frag);
+  }
+
+  function updateScheduleHighlight(){
+    var items = scheduleList.children;
+    for(var i=0;i<items.length;i++){
+      items[i].classList.toggle("current", i === idx);
+      items[i].classList.toggle("done", i < idx);
+    }
+    var railItems = scheduleRailTrack.children;
+    for(var j=0;j<railItems.length;j++){
+      railItems[j].classList.toggle("now", j === idx);
+      railItems[j].classList.toggle("done", j < idx);
+    }
+    var railCur = railItems[idx];
+    if(railCur) railCur.scrollIntoView({ block:"center", behavior:"smooth" });
+  }
+
+  function openScheduleOverlay(){
+    scheduleOverlay.classList.add("open");
+    var cur = scheduleList.children[idx];
+    if(cur) setTimeout(function(){ cur.scrollIntoView({ block:"center" }); }, 30);
+  }
+  function closeScheduleOverlay(){ scheduleOverlay.classList.remove("open"); }
+  scheduleExpandBtn.addEventListener("click", openScheduleOverlay);
+  closeScheduleBtn.addEventListener("click", closeScheduleOverlay);
+  scheduleOverlay.addEventListener("click", function(e){ if(e.target === scheduleOverlay) closeScheduleOverlay(); });
+
+  function renderPhase(phase, announceIt){
+    var colorVar = colorMap[phase.type];
+    runCard.style.setProperty("--c-current", "var(" + colorVar + ")");
+    phasePill.textContent = labelFor(phase);
+    phasePill.style.color = "var(" + colorVar + ")";
+    stationIndicator.textContent = phase.type === "end" ? "Fertig" : ("Station " + phase.station + " / " + cfg.stations);
+    overallFill.style.width = (Math.min(idx+1, schedule.length) / schedule.length * 100) + "%";
+    var nxt = schedule[idx+1];
+    nextPreview.textContent = nxt ? ("Als Nächstes: " + labelFor(nxt)) : "";
+    timerDisplay.classList.remove("pulse"); void timerDisplay.offsetWidth; timerDisplay.classList.add("pulse");
+    setMusicBaseline(
+      phase.type === "explain" ? (cfg.explainVolume/100) :
+      (phase.type === "switchpause" || phase.type === "change") ? (cfg.transitionVolume/100) :
+      1
+    );
+    if(announceIt){
+      signalFor(phase.type);
+      speak(phase.announce);
+    }
+  }
+
+  function formatTime(ms){
+    var totalSec = Math.max(0, Math.ceil(ms/1000));
+    var m = Math.floor(totalSec/60), s = totalSec%60;
+    return (m<10?"0":"")+m+":"+(s<10?"0":"")+s;
+  }
+
+  function startPhase(newIdx, announceIt){
+    idx = newIdx;
+    if(idx >= schedule.length){ finishAll(); return; }
+    var phase = schedule[idx];
+    remainingMs = phase.duration*1000;
+    phase._c3 = phase._c2 = phase._c1 = false;
+    renderPhase(phase, announceIt !== false);
+    if(running){ endTime = Date.now() + remainingMs; }
+    updateVisual();
+    updateScheduleHighlight();
+    backBtn.disabled = idx<=0;
+    if(phase.type === "end"){
+      setTimeout(function(){ stopRun(); }, 3500);
+    }
+  }
+
+  function updateVisual(){
+    timerDisplay.textContent = formatTime(remainingMs);
+    var phase = schedule[idx];
+    var pct = phase.duration>0 ? (1 - remainingMs/(phase.duration*1000))*100 : 100;
+    phaseFill.style.width = Math.max(0,Math.min(100,pct)) + "%";
+  }
+
+  var preCountdownBase = null;
+  function countdownBeep(num){
+    beep(950, 0.1, "sine", 0.3, 1, 0);
+    var restLevel = musicBaseVolume;
+    if(cfg.duck && playlist.length && !audioEl.paused){
+      if(preCountdownBase === null) preCountdownBase = musicBaseVolume;
+      var target = cfg.explainVolume/100;
+      var frac = (4 - num) / 3; // 3 -> 1/3, 2 -> 2/3, 1 -> fully at explain level
+      restLevel = preCountdownBase + (target - preCountdownBase) * frac;
+      if(num === 1){ preCountdownBase = null; }
+    }
+    speak(String(num), restLevel);
+  }
+
+  function checkCountdown(phase){
+    if(!cfg.countdown || phase.duration < 4 || phase.type === "end") return;
+    var secsLeft = Math.ceil(remainingMs/1000);
+    if(secsLeft === 3 && !phase._c3){ phase._c3 = true; countdownBeep(3); }
+    else if(secsLeft === 2 && !phase._c2){ phase._c2 = true; countdownBeep(2); }
+    else if(secsLeft === 1 && !phase._c1){ phase._c1 = true; countdownBeep(1); }
+  }
+
+  function tick(){
+    if(!running) return;
+    remainingMs = endTime - Date.now();
+    if(remainingMs <= 0){
+      startPhase(idx+1, true);
+      return;
+    }
+    checkCountdown(schedule[idx]);
+    updateVisual();
+  }
+
+  function beginRun(){
+    schedule = buildSchedule();
+    if(!schedule.length) return;
+    renderScheduleList();
+    readyCard.style.display = "none";
+    runCard.style.display = "block";
+    startBtn.textContent = "⏸ Pause";
+    startBtn.classList.add("pause");
+    skipBtn.disabled = false; backBtn.disabled = true; resetBtn.style.display = "inline-block";
+    running = true;
+    requestWake();
+    startPhase(0, true);
+    if(playlist.length){ playMusic(); }
+    tickHandle = setInterval(tick, 200);
+  }
+
+  function pauseRun(){
+    running = false;
+    startBtn.textContent = "▶ Fortsetzen";
+    startBtn.classList.remove("pause");
+    releaseWake();
+    if(tickHandle){ clearInterval(tickHandle); tickHandle = null; }
+    pauseMusic();
+  }
+
+  function resumeRun(){
+    running = true;
+    startBtn.textContent = "⏸ Pause";
+    startBtn.classList.add("pause");
+    endTime = Date.now() + remainingMs;
+    requestWake();
+    if(!tickHandle) tickHandle = setInterval(tick, 200);
+    if(playlist.length) playMusic();
+  }
+
+  function stopRun(){
+    running = false;
+    if(tickHandle){ clearInterval(tickHandle); tickHandle = null; }
+    releaseWake();
+    idx = -1;
+    readyCard.style.display = "block";
+    runCard.style.display = "none";
+    startBtn.textContent = "▶ Start";
+    startBtn.classList.remove("pause");
+    skipBtn.disabled = true; backBtn.disabled = true; resetBtn.style.display = "none";
+    overallFill.style.width = "0%";
+    stationIndicator.textContent = "Bereit";
+    pauseMusic();
+    updateScheduleHighlight();
+  }
+
+  function finishAll(){ /* handled by timeout in startPhase for 'end' */ }
+
+  startBtn.addEventListener("click", function(){
+    getCtx();
+    warmUpSpeech();
+    if(idx === -1){ beginRun(); }
+    else if(running){ pauseRun(); }
+    else { resumeRun(); }
+  });
+  skipBtn.addEventListener("click", function(){
+    if(idx === -1) return;
+    startPhase(idx+1, true);
+  });
+  backBtn.addEventListener("click", function(){
+    if(idx <= 0) return;
+    startPhase(idx-1, true);
+  });
+  resetBtn.addEventListener("click", stopRun);
+
+  // ---------- settings overlay ----------
+  function openSettings(){
+    fieldsFromCfg();
+    if("speechSynthesis" in window) populateVoices();
+    overlay.classList.add("open");
+  }
+  function closeSettings(){ overlay.classList.remove("open"); }
+  settingsBtn.addEventListener("click", openSettings);
+  closeSettingsBtn.addEventListener("click", closeSettings);
+  overlay.addEventListener("click", function(e){ if(e.target === overlay) closeSettings(); });
+  $("saveSettingsBtn").addEventListener("click", function(){
+    cfgFromFields();
+    saveSettings(cfg);
+    if(idx === -1){ schedule = buildSchedule(); renderScheduleList(); }
+    closeSettings();
+  });
+  $("defaultsBtn").addEventListener("click", function(){
+    cfg = Object.assign({}, defaults, { voiceURI: cfg.voiceURI, theme: cfg.theme });
+    fieldsFromCfg();
+  });
+  document.querySelectorAll("[data-say]").forEach(function(btn){
+    btn.addEventListener("click", function(){
+      getCtx();
+      warmUpSpeech();
+      speak($(btn.getAttribute("data-say")).value);
+    });
+  });
+
+  // ---------- theme toggle ----------
+  function applyThemeButtonLabel(){
+    themeBtn.textContent = cfg.theme === "dark" ? "🌙" : cfg.theme === "light" ? "☀️" : "🌓";
+  }
+  themeBtn.addEventListener("click", function(){
+    if(cfg.theme === "system") cfg.theme = "dark";
+    else if(cfg.theme === "dark") cfg.theme = "light";
+    else cfg.theme = "system";
+    if(cfg.theme === "system") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", cfg.theme);
+    applyThemeButtonLabel();
+    saveSettings(cfg);
+  });
+  applyThemeButtonLabel();
+
+  // ---------- fullscreen ----------
+  fullscreenBtn.addEventListener("click", function(){
+    try{
+      if(!document.fullscreenElement){ document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); }
+      else{ document.exitFullscreen && document.exitFullscreen(); }
+    }catch(e){}
+  });
+
+  fieldsFromCfg();
+  schedule = buildSchedule();
+  renderScheduleList();
+})();
+</script>
+</body>
+</html>
